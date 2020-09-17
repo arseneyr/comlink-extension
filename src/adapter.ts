@@ -7,6 +7,14 @@ export type OnPortCallback = (port: Runtime.Port) => void;
 
 export type PortResolver = (id: string, onPort: OnPortCallback) => void;
 export type PortDeserializer = (id: string) => MessagePort;
+declare global {
+  interface ProxyConstructor {
+    new <TSource extends object, TTarget extends object = TSource>(
+      target: TSource,
+      handler: ProxyHandler<TSource>
+    ): TTarget;
+  }
+}
 
 function _resolvePort(id: string, onPort: OnPortCallback) {
   onPort(browser.runtime.connect(undefined, { name: id }));
@@ -103,8 +111,15 @@ export function createEndpoint(
     return data;
   }
 
+  let portDisconnected = false;
+
   return {
     postMessage: (message, transfer: MessagePort[]) => {
+      if (portDisconnected) {
+        console.warn("Calling postMessage on closed port");
+        console.trace();
+        return;
+      }
       serialize(message);
       port.postMessage(message);
     },
@@ -123,6 +138,25 @@ export function createEndpoint(
         }
       };
       port.onMessage.addListener(listener);
+      port.onDisconnect.addListener(() => {
+        portDisconnected = true;
+        // let releaseMessageId = null;
+        // let releaseHandler: EventListenerOrEventListenerObject = () => {};
+        // const dummyProxy: Comlink.Endpoint = {
+        //   postMessage: (data: any) => {
+        //     releaseMessageId = data.id;
+        //     listener(data);
+        //   },
+        //   addEventListener: (_, handler: any) => {
+        //     releaseHandler = handler;
+        //   },
+        //   removeEventListener: () => {},
+        // };
+        // Comlink.wrap(dummyProxy)[Comlink.releaseProxy]();
+        // releaseHandler?.(
+        //   new MessageEvent("message", { data: { id: releaseMessageId } })
+        // );
+      });
       listeners.set(handler, listener);
     },
     removeEventListener: (_, handler) => {

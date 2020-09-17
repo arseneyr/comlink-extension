@@ -78,8 +78,14 @@ function createEndpoint(port, resolvePort = _resolvePort, deserializePort = _des
         }
         return data;
     }
+    let portDisconnected = false;
     return {
         postMessage: (message, transfer) => {
+            if (portDisconnected) {
+                console.warn("Calling postMessage on closed port");
+                console.trace();
+                return;
+            }
             serialize(message);
             port.postMessage(message);
         },
@@ -98,6 +104,25 @@ function createEndpoint(port, resolvePort = _resolvePort, deserializePort = _des
                 }
             };
             port.onMessage.addListener(listener);
+            port.onDisconnect.addListener(() => {
+                portDisconnected = true;
+                // let releaseMessageId = null;
+                // let releaseHandler: EventListenerOrEventListenerObject = () => {};
+                // const dummyProxy: Comlink.Endpoint = {
+                //   postMessage: (data: any) => {
+                //     releaseMessageId = data.id;
+                //     listener(data);
+                //   },
+                //   addEventListener: (_, handler: any) => {
+                //     releaseHandler = handler;
+                //   },
+                //   removeEventListener: () => {},
+                // };
+                // Comlink.wrap(dummyProxy)[Comlink.releaseProxy]();
+                // releaseHandler?.(
+                //   new MessageEvent("message", { data: { id: releaseMessageId } })
+                // );
+            });
             listeners.set(handler, listener);
         },
         removeEventListener: (_, handler) => {
